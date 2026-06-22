@@ -1,0 +1,602 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Medical AI Assistant</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+
+</head>
+
+<body data-theme="light">
+
+  <main class="app-shell">
+
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">🩺</div>
+        <h1>Medical AI Assistant</h1>
+        <p>
+          Ask medical reference questions, use voice input, copy answers,
+          and listen to responses in a clean professional chat interface.
+        </p>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Available Features</h3>
+
+        <div class="feature-list">
+          <div class="feature-item">
+            <span class="feature-icon">🎙️</span>
+            <span>Voice input using your browser microphone.</span>
+          </div>
+
+          <div class="feature-item">
+            <span class="feature-icon">🔊</span>
+            <span>Bot answer read aloud with speaker toggle.</span>
+          </div>
+
+          <div class="feature-item">
+            <span class="feature-icon">📋</span>
+            <span>Copy answer and clear chat controls.</span>
+          </div>
+
+          <div class="feature-item">
+            <span class="feature-icon">🌗</span>
+            <span>Light and dark professional UI mode.</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="chat-panel">
+
+      <header class="chat-header">
+        <div class="assistant-profile">
+          <div class="assistant-avatar">🩺</div>
+
+          <div class="assistant-meta">
+            <h2>Medical AI Assistant</h2>
+            <div class="status-row">
+              <span class="online-dot"></span>
+              <span id="statusText">Online now</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="tool-btn" type="button" id="speakerBtn" title="Voice output on/off">🔊</button>
+          <button class="tool-btn" type="button" id="themeBtn" title="Change theme">🌙</button>
+          <button class="tool-btn" type="button" id="clearBtn" title="Clear chat">🧹</button>
+        </div>
+      </header>
+
+      <div class="chat-body" id="chatBody">
+
+        <div class="date-label" id="dateLabel">Today</div>
+
+        <div class="message-row">
+          <div class="mini-avatar">AI</div>
+
+          <div class="message-stack">
+            <div class="message bot-message">
+              Hello 👋 I am your medical assistant. Ask me your health-related question by typing or using the microphone.
+            </div>
+
+            <div class="message-info">
+              <span id="firstTime"></span>
+              <div class="message-actions">
+                <button class="mini-action" type="button" onclick="copyText('Hello 👋 I am your medical assistant. Ask me your health-related question by typing or using the microphone.')">Copy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <button class="chip" type="button" onclick="quickMessage('What are the symptoms of fever?')">Fever symptoms</button>
+          <button class="chip" type="button" onclick="quickMessage('What causes headache?')">Headache</button>
+          <button class="chip" type="button" onclick="quickMessage('How to prevent diabetes?')">Diabetes</button>
+          <button class="chip" type="button" onclick="quickMessage('What are common causes of cough?')">Cough</button>
+        </div>
+
+      </div>
+
+      <div class="voice-banner" id="voiceBanner">
+        <div class="voice-banner-content">
+          <span class="pulse-dot"></span>
+          <span id="voiceBannerText">Listening... speak now</span>
+        </div>
+
+        <button class="mini-action" type="button" id="stopVoiceBtn">Stop</button>
+      </div>
+
+      <footer class="chat-footer">
+        <form class="composer" id="chatForm">
+          <button class="round-btn" type="button" id="micBtn" title="Start voice input">🎙️</button>
+
+          <textarea
+            id="userInput"
+            name="msg"
+            placeholder="Type your medical question..."
+            autocomplete="off"
+            rows="1"
+            required
+          ></textarea>
+
+          <button class="send-btn" type="submit" id="sendBtn" title="Send message">➤</button>
+        </form>
+
+        <div class="footer-meta">
+          <span>This chatbot is for <strong>educational help only</strong>, not a doctor replacement.</span>
+          <span id="charCount">0 characters</span>
+        </div>
+      </footer>
+
+    </section>
+
+  </main>
+
+  <div class="toast" id="toast">Copied</div>
+
+  <script>
+    const chatForm = document.getElementById("chatForm");
+    const userInput = document.getElementById("userInput");
+    const chatBody = document.getElementById("chatBody");
+    const sendBtn = document.getElementById("sendBtn");
+    const micBtn = document.getElementById("micBtn");
+    const speakerBtn = document.getElementById("speakerBtn");
+    const themeBtn = document.getElementById("themeBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const firstTime = document.getElementById("firstTime");
+    const statusText = document.getElementById("statusText");
+    const charCount = document.getElementById("charCount");
+    const voiceBanner = document.getElementById("voiceBanner");
+    const voiceBannerText = document.getElementById("voiceBannerText");
+    const stopVoiceBtn = document.getElementById("stopVoiceBtn");
+    const toast = document.getElementById("toast");
+
+    let speakerEnabled = true;
+    let recognition = null;
+    let isListening = false;
+    let isSending = false;
+
+    firstTime.innerText = getCurrentTime();
+
+    function getCurrentTime() {
+      const now = new Date();
+
+      return now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function scrollToBottom() {
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function autoResizeTextarea() {
+      userInput.style.height = "auto";
+      userInput.style.height = Math.min(userInput.scrollHeight, 128) + "px";
+    }
+
+    function updateCharCount() {
+      const length = userInput.value.length;
+      charCount.innerText = `${length} character${length === 1 ? "" : "s"}`;
+    }
+
+    function showToast(message) {
+      toast.innerText = message;
+      toast.classList.add("show");
+
+      setTimeout(() => {
+        toast.classList.remove("show");
+      }, 1800);
+    }
+
+    function createSafeTextElement(tagName, className, text) {
+      const element = document.createElement(tagName);
+      element.className = className;
+      element.innerText = text;
+      return element;
+    }
+
+    function addUserMessage(message) {
+      const messageRow = document.createElement("div");
+      messageRow.className = "message-row user";
+
+      const stack = document.createElement("div");
+      stack.className = "message-stack";
+
+      const bubble = createSafeTextElement("div", "message user-message", message);
+
+      const info = document.createElement("div");
+      info.className = "message-info";
+      info.innerHTML = `<span>${getCurrentTime()}</span>`;
+
+      stack.appendChild(bubble);
+      stack.appendChild(info);
+      messageRow.appendChild(stack);
+
+      chatBody.appendChild(messageRow);
+      scrollToBottom();
+    }
+
+    function addBotMessage(message) {
+      const messageRow = document.createElement("div");
+      messageRow.className = "message-row";
+
+      const avatar = document.createElement("div");
+      avatar.className = "mini-avatar";
+      avatar.innerText = "AI";
+
+      const stack = document.createElement("div");
+      stack.className = "message-stack";
+
+      const bubble = createSafeTextElement("div", "message bot-message", message);
+
+      const info = document.createElement("div");
+      info.className = "message-info";
+
+      const time = document.createElement("span");
+      time.innerText = getCurrentTime();
+
+      const actions = document.createElement("div");
+      actions.className = "message-actions";
+
+      const copyButton = document.createElement("button");
+      copyButton.className = "mini-action";
+      copyButton.type = "button";
+      copyButton.innerText = "Copy";
+      copyButton.addEventListener("click", () => copyText(message));
+
+      const speakButton = document.createElement("button");
+      speakButton.className = "mini-action";
+      speakButton.type = "button";
+      speakButton.innerText = "Speak";
+      speakButton.addEventListener("click", () => speakText(message, true));
+
+      actions.appendChild(copyButton);
+      actions.appendChild(speakButton);
+
+      info.appendChild(time);
+      info.appendChild(actions);
+
+      stack.appendChild(bubble);
+      stack.appendChild(info);
+
+      messageRow.appendChild(avatar);
+      messageRow.appendChild(stack);
+
+      chatBody.appendChild(messageRow);
+      scrollToBottom();
+
+      if (speakerEnabled) {
+        speakText(message, false);
+      }
+    }
+
+    function addTypingIndicator() {
+      const typingRow = document.createElement("div");
+      typingRow.className = "message-row";
+      typingRow.id = "typingIndicator";
+
+      typingRow.innerHTML = `
+        <div class="mini-avatar">AI</div>
+        <div class="message-stack">
+          <div class="message bot-message typing-message">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="message-info">
+            <span>Thinking...</span>
+          </div>
+        </div>
+      `;
+
+      chatBody.appendChild(typingRow);
+      scrollToBottom();
+    }
+
+    function removeTypingIndicator() {
+      const typingIndicator = document.getElementById("typingIndicator");
+
+      if (typingIndicator) {
+        typingIndicator.remove();
+      }
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Copied to clipboard");
+      } catch (error) {
+        const tempInput = document.createElement("textarea");
+        tempInput.value = text;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        tempInput.remove();
+        showToast("Copied");
+      }
+    }
+
+    function speakText(text, forceSpeak) {
+      if (!("speechSynthesis" in window)) {
+        showToast("Text-to-speech not supported in this browser");
+        return;
+      }
+
+      if (!speakerEnabled && !forceSpeak) {
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeaking() {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    async function sendMessage(message) {
+      const cleanMessage = message.trim();
+
+      if (!cleanMessage || isSending) {
+        return;
+      }
+
+      isSending = true;
+      statusText.innerText = "Generating answer...";
+
+      addUserMessage(cleanMessage);
+
+      userInput.value = "";
+      autoResizeTextarea();
+      updateCharCount();
+
+      sendBtn.disabled = true;
+      micBtn.disabled = true;
+
+      addTypingIndicator();
+
+      try {
+        const formData = new FormData();
+        formData.append("msg", cleanMessage);
+
+        const response = await fetch("/get", {
+          method: "POST",
+          body: formData
+        });
+
+        let data = null;
+
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          throw new Error("Invalid JSON response from server");
+        }
+
+        removeTypingIndicator();
+
+        if (!response.ok) {
+          addBotMessage(data.answer || "Server returned an error. Please try again.");
+        } else if (data.success) {
+          addBotMessage(data.answer || "Sorry, I could not find an answer.");
+        } else {
+          addBotMessage(data.answer || "Something went wrong. Please try again.");
+        }
+
+      } catch (error) {
+        removeTypingIndicator();
+        addBotMessage("Server connection failed. Please check your Flask app and make sure it is running on the same port.");
+        console.error(error);
+      }
+
+      isSending = false;
+      sendBtn.disabled = false;
+      micBtn.disabled = false;
+      statusText.innerText = "Online now";
+      userInput.focus();
+    }
+
+    function quickMessage(message) {
+      sendMessage(message);
+    }
+
+    function clearChat() {
+      stopSpeaking();
+
+      const rows = chatBody.querySelectorAll(".message-row");
+      rows.forEach((row, index) => {
+        if (index > 0) {
+          row.remove();
+        }
+      });
+
+      const chips = chatBody.querySelector(".chips");
+
+      if (!chips) {
+        return;
+      }
+
+      showToast("Chat cleared");
+      scrollToBottom();
+    }
+
+    function setupSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+        micBtn.disabled = true;
+        micBtn.title = "Voice input is not supported in this browser";
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = false;
+
+      recognition.onstart = function () {
+        isListening = true;
+        micBtn.classList.add("active");
+        voiceBanner.classList.add("show");
+        voiceBannerText.innerText = "Listening... speak now";
+        statusText.innerText = "Listening...";
+      };
+
+      recognition.onresult = function (event) {
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        const combinedText = (finalTranscript || interimTranscript).trim();
+
+        if (combinedText) {
+          userInput.value = combinedText;
+          autoResizeTextarea();
+          updateCharCount();
+        }
+
+        if (finalTranscript.trim()) {
+          voiceBannerText.innerText = "Voice captured. Sending...";
+          setTimeout(() => {
+            sendMessage(finalTranscript.trim());
+          }, 350);
+        }
+      };
+
+      recognition.onerror = function (event) {
+        isListening = false;
+        micBtn.classList.remove("active");
+        voiceBanner.classList.remove("show");
+        statusText.innerText = "Online now";
+
+        if (event.error === "not-allowed") {
+          showToast("Microphone permission denied");
+        } else {
+          showToast("Voice input stopped");
+        }
+      };
+
+      recognition.onend = function () {
+        isListening = false;
+        micBtn.classList.remove("active");
+        voiceBanner.classList.remove("show");
+
+        if (!isSending) {
+          statusText.innerText = "Online now";
+        }
+      };
+    }
+
+    function toggleMic() {
+      if (!recognition) {
+        showToast("Voice input not supported in this browser");
+        return;
+      }
+
+      if (isListening) {
+        recognition.stop();
+      } else {
+        stopSpeaking();
+        recognition.start();
+      }
+    }
+
+    chatForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      sendMessage(userInput.value);
+    });
+
+    userInput.addEventListener("input", function () {
+      autoResizeTextarea();
+      updateCharCount();
+    });
+
+    userInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage(userInput.value);
+      }
+    });
+
+    micBtn.addEventListener("click", toggleMic);
+
+    stopVoiceBtn.addEventListener("click", function () {
+      if (recognition && isListening) {
+        recognition.stop();
+      }
+    });
+
+    speakerBtn.addEventListener("click", function () {
+      speakerEnabled = !speakerEnabled;
+
+      if (speakerEnabled) {
+        speakerBtn.classList.add("active");
+        speakerBtn.innerText = "🔊";
+        showToast("Voice output on");
+      } else {
+        speakerBtn.classList.remove("active");
+        speakerBtn.innerText = "🔇";
+        stopSpeaking();
+        showToast("Voice output off");
+      }
+    });
+
+    themeBtn.addEventListener("click", function () {
+      const body = document.body;
+      const isDark = body.getAttribute("data-theme") === "dark";
+
+      if (isDark) {
+        body.setAttribute("data-theme", "light");
+        themeBtn.innerText = "🌙";
+        showToast("Light mode enabled");
+      } else {
+        body.setAttribute("data-theme", "dark");
+        themeBtn.innerText = "☀️";
+        showToast("Dark mode enabled");
+      }
+    });
+
+    clearBtn.addEventListener("click", clearChat);
+
+    window.addEventListener("beforeunload", function () {
+      stopSpeaking();
+
+      if (recognition && isListening) {
+        recognition.stop();
+      }
+    });
+
+    setupSpeechRecognition();
+    speakerBtn.classList.add("active");
+    updateCharCount();
+    autoResizeTextarea();
+  </script>
+
+</body>
+</html>
