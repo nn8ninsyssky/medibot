@@ -88,6 +88,7 @@ jobs:
             --restart always \
             --network host \
             -e PINECONE_API_KEY="${{ secrets.PINECONE_API_KEY }}" \
+            -e OLLAMA_MODEL="qwen2.5:0.5b" \
             "$IMAGE_URI"
 
       - name: Check running container

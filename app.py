@@ -40,15 +40,14 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-#OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 
 if not PINECONE_API_KEY:
     raise ValueError("PINECONE_API_KEY is missing in .env file.")
 
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
 
-# if OPENAI_API_KEY:
-#     os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
 
 
 # ---------------------------------------------------------
@@ -56,7 +55,7 @@ os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
 # ---------------------------------------------------------
 
 INDEX_NAME = "medical-chatbot"
-MODEL_NAME = "llama3.2:3b"
+MODEL_NAME = "qwen2.5:0.5b"
 
 
 logger.info("Loading embeddings...")
